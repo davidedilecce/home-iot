@@ -10,3 +10,6 @@
 [submodule "home-iot-config-server"]
 	path = home-iot-config-server
 	url = https://github.com/davidedilecce/home-iot-config-server.git
+[submodule "home-iot-ms-telemetry"]
+	path = home-iot-ms-telemetry
+	url = https://github.com/davidedilecce/home-iot-ms-telemetry.git
