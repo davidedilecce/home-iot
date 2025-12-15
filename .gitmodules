@@ -1,0 +1,12 @@
+[submodule "home-iot-ms-gateway"]
+	path = home-iot-ms-gateway
+	url = https://github.com/davidedilecce/home-iot-ms-gateway.git
+[submodule "home-iot-ms-apartment"]
+	path = home-iot-ms-apartment
+	url = https://github.com/davidedilecce/home-iot-ms-apartment.git
+[submodule "home-iot-config"]
+	path = home-iot-config
+	url = https://github.com/davidedilecce/home-iot-config.git
+[submodule "home-iot-config-server"]
+	path = home-iot-config-server
+	url = https://github.com/davidedilecce/home-iot-config-server.git
