@@ -16,3 +16,6 @@
 [submodule "home-iot-zigbee2mqtt-forwarder"]
     path = home-iot-zigbee2mqtt-forwarder
     url = https://github.com/davidedilecce/home-iot-zigbee2mqtt-forwarder.git
+[submodule "home-iot-ms-user"]
+    path = home-iot-ms-user
+    url = https://github.com/davidedilecce/home-iot-ms-user.git
