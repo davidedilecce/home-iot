@@ -19,3 +19,7 @@
 [submodule "home-iot-ms-user"]
     path = home-iot-ms-user
     url = https://github.com/davidedilecce/home-iot-ms-user.git
+[submodule "home-iot-auth-server"]
+    path = home-iot-auth-server
+    url = https://github.com/davidedilecce/home-iot-auth-server.git
+
