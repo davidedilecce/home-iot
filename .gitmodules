@@ -22,4 +22,7 @@
 [submodule "home-iot-auth-server"]
     path = home-iot-auth-server
     url = https://github.com/davidedilecce/home-iot-auth-server.git
+[submodule "home-iot-api-gateway"]
+    path = home-iot-api-gateway
+    url = https://github.com/davidedilecce/home-iot-api-gateway.git
 
