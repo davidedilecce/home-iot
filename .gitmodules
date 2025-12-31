@@ -28,3 +28,6 @@
 [submodule "home-iot-ms-telemetry-writer"]
 	path = home-iot-ms-telemetry-writer
 	url = https://github.com/davidedilecce/home-iot-ms-telemetry-writer.git
+[submodule "home-iot-ms-telemetry-reader"]
+    path = home-iot-ms-telemetry-reader
+    url = https://github.com/davidedilecce/home-iot-ms-telemetry-reader.git
