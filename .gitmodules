@@ -25,3 +25,6 @@
 [submodule "home-iot-api-gateway"]
 	path = home-iot-api-gateway
 	url = https://github.com/davidedilecce/home-iot-api-gateway.git
+[submodule "home-iot-ms-telemetry-writer"]
+	path = home-iot-ms-telemetry-writer
+	url = https://github.com/davidedilecce/home-iot-ms-telemetry-writer.git
