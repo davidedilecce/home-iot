@@ -10,9 +10,6 @@
 [submodule "home-iot-config-server"]
 	path = home-iot-config-server
 	url = https://github.com/davidedilecce/home-iot-config-server.git
-[submodule "home-iot-ms-telemetry-writer"]
-	path = home-iot-ms-telemetry-writer
-	url = https://github.com/davidedilecce/home-iot-ms-telemetry-writer.git
 [submodule "home-iot-zigbee2mqtt-forwarder"]
     path = home-iot-zigbee2mqtt-forwarder
     url = https://github.com/davidedilecce/home-iot-zigbee2mqtt-forwarder.git
