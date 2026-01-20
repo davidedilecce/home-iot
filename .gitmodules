@@ -31,3 +31,6 @@
 [submodule "home-iot-ms-telemetry-reader"]
     path = home-iot-ms-telemetry-reader
     url = https://github.com/davidedilecce/home-iot-ms-telemetry-reader.git
+[submodule "home-iot-ms-events"]
+    path = home-iot-ms-events
+    url = https://github.com/davidedilecce/home-iot-ms-events.git
