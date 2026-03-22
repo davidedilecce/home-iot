@@ -35,5 +35,5 @@
     path = home-iot-ms-events
     url = https://github.com/davidedilecce/home-iot-ms-events.git
 [submodule "home-iot-bff-ios"]
-    path = home-iot-bff-ios
-    url = https://github.com/davidedilecce/home-iot-bff-ios.git
+	path = home-iot-bff-ios
+	url = https://github.com/davidedilecce/home-iot-bff-ios.git
