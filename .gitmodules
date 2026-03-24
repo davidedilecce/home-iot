@@ -37,3 +37,6 @@
 [submodule "home-iot-bff-ios"]
 	path = home-iot-bff-ios
 	url = https://github.com/davidedilecce/home-iot-bff-ios.git
+[submodule "home-iot-common"]
+	path = home-iot-common
+	url = https://github.com/davidedilecce/home-iot-common.git
