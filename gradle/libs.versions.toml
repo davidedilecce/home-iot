@@ -24,6 +24,7 @@ resilience4j                = "2.1.0"
 
 # Spring Boot starters (version managed by Spring Boot BOM)
 spring-boot-starter                          = { module = "org.springframework.boot:spring-boot-starter" }
+spring-boot-starter-actuator                 = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-amqp                     = { module = "org.springframework.boot:spring-boot-starter-amqp" }
 spring-boot-starter-data-mongodb             = { module = "org.springframework.boot:spring-boot-starter-data-mongodb" }
 spring-boot-starter-security                 = { module = "org.springframework.boot:spring-boot-starter-security" }
@@ -39,10 +40,6 @@ spring-boot-starter-test-webflux             = { module = "org.springframework.b
 spring-boot-starter-test-webmvc              = { module = "org.springframework.boot:spring-boot-starter-webmvc-test" }
 
 # Spring Cloud (version managed by Spring Cloud BOM)
-spring-cloud-config-server                   = { module = "org.springframework.cloud:spring-cloud-config-server" }
-spring-cloud-starter-config                  = { module = "org.springframework.cloud:spring-cloud-starter-config" }
-spring-cloud-starter-eureka-client           = { module = "org.springframework.cloud:spring-cloud-starter-netflix-eureka-client" }
-spring-cloud-starter-eureka-server           = { module = "org.springframework.cloud:spring-cloud-starter-netflix-eureka-server" }
 spring-cloud-starter-gateway-webflux         = { module = "org.springframework.cloud:spring-cloud-starter-gateway-server-webflux" }
 spring-cloud-starter-gateway-webmvc          = { module = "org.springframework.cloud:spring-cloud-starter-gateway-server-webmvc" }
 spring-cloud-starter-circuitbreaker-resilience4j = { module = "org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j" }

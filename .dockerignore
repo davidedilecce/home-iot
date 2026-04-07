@@ -1,0 +1,30 @@
+# Build output
+**/build/
+**/out/
+**/.gradle/
+
+# IDE
+**/.idea/
+**/.vscode/
+**/*.iml
+
+# Git
+**/.git/
+**/.gitmodules
+
+# Docker
+**/docker-compose*.yml
+**/.dockerignore
+
+# Documentation & images
+images/
+*.md
+LICENSE
+
+# OS
+**/.DS_Store
+**/Thumbs.db
+
+# Zigbee forwarder (separate build)
+home-iot-zigbee2mqtt-forwarder/
+

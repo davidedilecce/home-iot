@@ -1,0 +1,281 @@
+# =============================================================================
+#  Home IoT — Docker Compose (local test)
+#
+#  From root (home-iot/):
+#
+#    cp .env.example .env          # first time — set environment variables
+#    docker compose up -d
+#    docker compose logs -f
+#    docker compose down
+#    docker compose down -v
+#
+#  Build context = . (root)
+#  Dockerfile for every microservice: docker/<service>/Dockerfile
+#
+#  SERVER_PORT internal = 8080 for every microservice (default in application.yaml).
+#  Ports are different for direct access in develop mode:
+#    api-gateway  → localhost:8080  (entry point)
+#    auth-server  → localhost:8889
+#    bff-ios      → localhost:8010
+#    ms-apartment → localhost:9000
+#    ms-gateway   → localhost:9001
+#    ms-user      → localhost:9002
+#    ms-events    → localhost:9003
+#    ms-telemetry-reader → localhost:9010
+#
+#  Spring profile "docker" (SPRING_PROFILES_ACTIVE=docker)
+# =============================================================================
+
+services:
+
+  # ========================== INFRA ==========================
+
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 192m
+
+  influxdb:
+    image: influxdb:2
+    container_name: influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_INIT_PASSWORD:-changeme123}
+      DOCKER_INFLUXDB_INIT_ORG: home-iot
+      DOCKER_INFLUXDB_INIT_BUCKET: home-iot
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${HOME_IOT_INFLUX_API_TOKEN:-my-dev-token}
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    mem_limit: 32m
+
+  # ====================== MICROSERVICES ======================
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: docker/api-gateway/Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      - auth-server
+      - bff-ios
+      - ms-user
+      - ms-apartment
+      - ms-gateway
+      - ms-telemetry-reader
+      - ms-events
+    mem_limit: 256m
+
+  auth-server:
+    build:
+      context: .
+      dockerfile: docker/auth-server/Dockerfile
+    container_name: auth-server
+    restart: unless-stopped
+    ports:
+      - "8889:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+      HOME_IOT_JWT_SECRET: ${HOME_IOT_JWT_SECRET:-my-super-secret-jwt-key-for-dev-only}
+    depends_on:
+      - ms-user
+    mem_limit: 256m
+
+  bff-ios:
+    build:
+      context: .
+      dockerfile: docker/bff-ios/Dockerfile
+    container_name: bff-ios
+    restart: unless-stopped
+    ports:
+      - "8010:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      - ms-apartment
+      - ms-gateway
+      - ms-telemetry-reader
+      - ms-events
+    mem_limit: 256m
+
+  ms-apartment:
+    build:
+      context: .
+      dockerfile: docker/ms-apartment/Dockerfile
+    container_name: ms-apartment
+    restart: unless-stopped
+    ports:
+      - "9000:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    mem_limit: 256m
+
+  ms-gateway:
+    build:
+      context: .
+      dockerfile: docker/ms-gateway/Dockerfile
+    container_name: ms-gateway
+    restart: unless-stopped
+    ports:
+      - "9001:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    mem_limit: 256m
+
+  ms-user:
+    build:
+      context: .
+      dockerfile: docker/ms-user/Dockerfile
+    container_name: ms-user
+    restart: unless-stopped
+    ports:
+      - "9002:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+      HOME_IOT_ADMIN_USERNAME: ${HOME_IOT_ADMIN_USERNAME:-admin}
+      HOME_IOT_ADMIN_PASSWORD: ${HOME_IOT_ADMIN_PASSWORD:-admin123}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    mem_limit: 256m
+
+  ms-events:
+    build:
+      context: .
+      dockerfile: docker/ms-events/Dockerfile
+    container_name: ms-events
+    restart: unless-stopped
+    ports:
+      - "9003:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    mem_limit: 256m
+
+  ms-telemetry-reader:
+    build:
+      context: .
+      dockerfile: docker/ms-telemetry-reader/Dockerfile
+    container_name: ms-telemetry-reader
+    restart: unless-stopped
+    ports:
+      - "9010:8080"
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+      HOME_IOT_INFLUX_API_TOKEN: ${HOME_IOT_INFLUX_API_TOKEN:-my-dev-token}
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    mem_limit: 256m
+
+  ms-telemetry-writer:
+    build:
+      context: .
+      dockerfile: docker/ms-telemetry-writer/Dockerfile
+    container_name: ms-telemetry-writer
+    restart: unless-stopped
+    # Nessuna porta applicativa — servizio headless (web-application-type: none)
+    # Porta 8082 esposta solo per Actuator health check (definita in application-docker.yaml)
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseSerialGC"
+      SPRING_PROFILES_ACTIVE: docker
+      HOME_IOT_INFLUX_API_TOKEN: ${HOME_IOT_INFLUX_API_TOKEN:-my-dev-token}
+      HOME_IOT_MQTT_TOPIC: ${HOME_IOT_MQTT_TOPIC:-gateways/+/sensors/#}
+      HOME_IOT_MQTT_USERNAME: ${HOME_IOT_MQTT_USERNAME:-}
+      HOME_IOT_MQTT_PASSWORD: ${HOME_IOT_MQTT_PASSWORD:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    mem_limit: 256m
+
+# ========================== VOLUMES ==========================
+
+volumes:
+  mongodb_data:
+  influxdb_data:
+  mosquitto_data:
+
