@@ -4,12 +4,6 @@
 [submodule "home-iot-ms-apartment"]
 	path = home-iot-ms-apartment
 	url = https://github.com/davidedilecce/home-iot-ms-apartment.git
-[submodule "home-iot-config"]
-	path = home-iot-config
-	url = https://github.com/davidedilecce/home-iot-config.git
-[submodule "home-iot-config-server"]
-	path = home-iot-config-server
-	url = https://github.com/davidedilecce/home-iot-config-server.git
 [submodule "home-iot-zigbee2mqtt-forwarder"]
     path = home-iot-zigbee2mqtt-forwarder
     url = https://github.com/davidedilecce/home-iot-zigbee2mqtt-forwarder.git
@@ -19,9 +13,6 @@
 [submodule "home-iot-auth-server"]
     path = home-iot-auth-server
     url = https://github.com/davidedilecce/home-iot-auth-server.git
-[submodule "home-iot-service-registry"]
-	path = home-iot-service-registry
-	url = https://github.com/davidedilecce/home-iot-service-registry.git
 [submodule "home-iot-api-gateway"]
 	path = home-iot-api-gateway
 	url = https://github.com/davidedilecce/home-iot-api-gateway.git
