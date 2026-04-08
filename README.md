@@ -4,330 +4,135 @@
 
 ## Overview
 
-**Home IoT** is a comprehensive, open-source Internet of Things (IoT) platform designed for intelligent home automation and telemetry management. It provides a modular microservices architecture that enables real-time collection, processing, and analysis of sensor data from Zigbee-enabled IoT devices. The platform supports seamless integration with smart home devices, asynchronous event processing, centralized user management, and a secure, scalable API layer.
+**Home IoT** is a comprehensive, open-source Internet of Things platform designed for intelligent home automation and telemetry management. Built on a cloud-native microservices architecture, it enables real-time collection, processing, and analysis of sensor data from Zigbee-enabled IoT devices.
 
-Built on a modern cloud-native stack using Spring Boot and Spring Cloud, Home IoT is ideal for developers, system integrators, and IoT enthusiasts who want a flexible, production-ready solution to:
-
-- Acquire telemetry data from Zigbee-based sensors in real-time
-- Process and store events from distributed IoT devices
-- Manage users and permissions with centralized authentication
-- Query and retrieve the latest sensor readings with low latency
-- Scale horizontally to support large deployments
+The platform supports seamless integration with smart home devices, asynchronous event processing, centralized user management, and a secure, scalable API layer — ready for local development via Docker Compose and production deployment on AWS Fargate.
 
 ---
 
 ## Technology Stack
 
-The Home IoT platform is built using industry-leading open-source technologies:
-
-| Component | Technology |
-|-----------|-----------|
+| Layer | Technology |
+|-------|-----------|
 | **Language** | Java 21 |
 | **Framework** | Spring Boot 4.0.1, Spring Cloud 2025.1.0 |
-| **Build Tool** | Gradle (Kotlin DSL) |
-| **API Gateway** | Spring Cloud Gateway (WebFlux/WebMVC) |
-| **Message Broker** | RabbitMQ (asynchronous event streaming) |
-| **IoT Protocol** | MQTT (Zigbee2MQTT integration) |
-| **Security** | Spring Security |
-| **Project Grouping** | Git Submodules for independent versioning |
+| **Build** | Gradle (Kotlin DSL), shared version catalog (`gradle/libs.versions.toml`) |
+| **API Gateway** | Spring Cloud Gateway (WebFlux) with JWT authentication filter |
+| **Message Broker** | RabbitMQ (AMQP 0.9.1) |
+| **IoT Protocol** | MQTT v3.1.1 (Eclipse Paho + Spring Integration MQTT) |
+| **Databases** | MongoDB 7 (domain data), InfluxDB 2 (time-series telemetry) |
+| **Security** | Spring Security, JWT (jjwt 0.12.7), RBAC |
+| **Resilience** | Resilience4j (circuit breaker + retry) |
+| **Mapping** | MapStruct 1.6.3 |
+| **API Docs** | Springdoc OpenAPI 3 + Swagger UI |
+| **IoT Forwarder** | Python 3.11 + paho-mqtt |
+| **Containerization** | Docker multi-stage builds, Docker Compose |
+| **Cloud Ready** | AWS Fargate, ALB, DocumentDB, Amazon MQ, InfluxDB on EC2 |
 
 ---
 
-## Architecture Overview
+## Architecture
 
-Home IoT follows a **microservices architecture** pattern with clear separation of concerns:
+<img src="drawio/architecture.png" alt="Architecture"/>
+
+### Data Flow
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Client Applications                     │
-│              (Mobile, Web, IoT Devices)                     │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-         ┌───────────────▼───────────────┐
-         │   API Gateway (Spring Cloud)  │
-         │   - Request Routing           │
-         │   - Authentication            │
-         │   - Rate Limiting             │
-         └───────────────┬───────────────┘
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-    ┌───▼────┐   ┌──────▼──────┐   ┌─────▼────┐
-    │ Auth   │   │  Domain     │   │Telemetry │
-    │Service │   │ Microsvcs   │   │ Microsvcs│
-    └────────┘   └─────────────┘   └──────────┘
-        │                │                │
-        └────────────────┼────────────────┘
-                         │
-        ┌────────────────▼────────────────┐
-        │  Message Broker (RabbitMQ)      │
-        │  - Asynchronous Event Streaming │
-        │  - Service-to-Service Comm.     │
-        └────────────────┬────────────────┘
-                         │
-        ┌────────────────▼────────────────┐
-        │ Service Registry (Eureka)       │
-        │ - Service Discovery             │
-        │ - Health Monitoring             │
-        └─────────────────────────────────┘
+Zigbee Device → Zigbee2MQTT → Mosquitto (local MQTT broker)
+                                    ↓
+                        zigbee2mqtt-forwarder (Python)
+                                    ↓
+                        Mosquitto / AWS IoT Core (remote MQTT broker)
+                                    ↓
+                          ms-telemetry-writer
+                            ├─→ InfluxDB  (time-series storage)
+                            └─→ RabbitMQ  (telemetry events)
+                                    ↓
+                              ms-events (consumer)
+                                ├─→ MongoDB (event persistence)
+                                └─→ Threshold evaluation (alarms)
+                                    ↓
+            Client App ←→ ALB ←→ api-gateway ←→ bff-ios / ms-* services
 ```
 
 ---
 
-## UI - iOS
+## Microservices Map
 
-Below is an overview of the main screens in the Home IoT iOS application.
-
----
-
-### 1. Login Page
-<img src="images/login.png" alt="Login" width="200px"/>
-
----
-
-### 2. Apartments List
-<img src="images/apartments-list.png" alt="Apartments List" width="200px"/>
-
----
-
-### 3. Apartment Detail
-<img src="images/apartment-details-4.png" alt="Apartment Detail" width="200px"/>
+| # | Service | Type | Port | Infrastructure | Description |
+|---|---------|------|------|----------------|-------------|
+| 1 | **api-gateway** | API Gateway (WebFlux) | 8080 | — | Single entry point. JWT auth, RBAC, path rewriting, routing to all downstream services |
+| 2 | **auth-server** | Auth + JWT | 8080 | — | Issues and validates JWT tokens. Delegates credential check to ms-user |
+| 3 | **bff-ios** | BFF (Reactive) | 8080 | — | Backend-for-Frontend for the iOS app. Aggregates data from multiple services with Resilience4j circuit breakers |
+| 4 | **ms-apartment** | Domain CRUD | 8080 | MongoDB | Apartments, rooms, device mappings |
+| 5 | **ms-gateway** | Domain CRUD | 8080 | MongoDB | IoT gateways and device metadata |
+| 6 | **ms-user** | Domain CRUD | 8080 | MongoDB | User accounts, roles, credentials |
+| 7 | **ms-events** | Event Processor | 8080 | MongoDB, RabbitMQ | Consumes telemetry events, evaluates thresholds, generates alarms |
+| 8 | **ms-telemetry-reader** | Telemetry Query (WebMVC) | 8080 | InfluxDB | REST API for historical telemetry queries (Flux language) |
+| 9 | **ms-telemetry-writer** | Telemetry Ingest (headless) | — *(actuator: 8082)* | InfluxDB, RabbitMQ, MQTT | Subscribes to MQTT topics, writes to InfluxDB, publishes events to RabbitMQ |
+| 10 | **zigbee2mqtt-forwarder** | MQTT Bridge (Python) | — | MQTT | Bridges local Zigbee2MQTT broker to remote MQTT broker |
+| — | **home-iot-common** | Shared Library | N/A | — | DTOs, security configs, CORS, Jackson, exception handling. Used by all JVM services |
 
 ---
 
-### 4. Water Leak Alarm
-<img src="images/apartment-details.png" alt="Water Leak Alarm" width="200px"/>
+## Shared Library — `home-iot-common`
 
----
+A plain JAR (no Spring Boot app) included as a Gradle project dependency by every JVM microservice:
 
-### 5. Smoke Alarm
-<img src="images/apartment-details-3.png" alt="Smoke Alarm" width="200px"/>
+```kotlin
+implementation(project(":home-iot-common"))
+```
 
----
-
-### 6. No Alarm
-<img src="images/apartment-details-2.png" alt="No Alarm" width="200px"/>
-
----
-
-### 7. Events
-<img src="images/events-list.png" alt="Events" width="200px"/>
-
----
-
-### 8. Profile
-<img src="images/profile.png" alt="Profile" width="200px"/>
-
-
-## Microservices Architecture
-
-### 1. **API Gateway & Entry Point**
-
-#### `home-iot-api-gateway`
-- **Purpose:** Central API Gateway - the single entry point for all external client requests
-- **Responsibilities:**
-  - Route incoming API requests to appropriate microservices based on request path
-  - Handle cross-cutting concerns: authentication, authorization, rate limiting
-  - Support both synchronous (REST) and asynchronous (RabbitMQ-based) communication patterns
-  - Aggregate responses from multiple services for complex queries
-  - WebFlux for non-blocking, reactive request handling
-- **Technology:** Spring Cloud Gateway, WebFlux/WebMVC, Eureka Client
-- **Communication Patterns:**
-  - **REST:** Direct synchronous calls to domain microservices
-  - **Async:** Publishes telemetry queries to RabbitMQ for event-driven processing
-- **Security:** Authenticates all incoming requests before routing
-
-### 2. **Authentication & Security**
-
-#### `home-iot-auth-server`
-- **Purpose:** Centralized authentication and authorization service
-- **Responsibilities:**
-  - Issues and validates authentication tokens (JWT or session-based)
-  - Manages user credentials securely
-  - Enforces role-based access control (RBAC)
-  - Integrates with all microservices for authorization checks
-  - Manages password policies and security configurations
-- **Technology:** Spring Boot, Spring Security, Eureka Client
-- **Service Registration:** Registers with Eureka for discoverability
-- **Notes:** Critical component for platform security and multi-tenant support
-
-### 3. **Domain Microservices**
-
-#### `home-iot-ms-apartment`
-- **Purpose:** Manages apartment/property-level entities and telemetry aggregation
-- **Responsibilities:**
-  - CRUD operations for apartment/property entities
-  - Aggregates telemetry data from devices within an apartment
-  - Retrieves latest sensor readings for devices
-  - Publishes apartment-related events asynchronously via RabbitMQ
-  - Handles queries for apartment status and device mappings
-- **Technology:** Spring Boot, Spring Security, RabbitMQ Client, Eureka Client
-- **Data Model:** Apartments, rooms, device mappings, aggregated telemetry
-- **Event Publishing:** Emits events when apartments or device states change
-
-#### `home-iot-ms-user`
-- **Purpose:** User account and profile management service
-- **Responsibilities:**
-  - User registration and account creation
-  - User profile management (name, email, preferences)
-  - User role and permission assignments
-  - Integration with auth server for credential management
-  - User data persistence and retrieval
-- **Technology:** Spring Boot, Spring Security, JPA/Hibernate, Eureka Client
-- **Service Registration:** Registers with Eureka for service discovery
-- **Security:** Spring Security integration for role-based access
-
-#### `home-iot-ms-events`
-- **Purpose:** Event management and event sourcing service
-- **Responsibilities:**
-  - Consumes events from RabbitMQ published by other microservices
-  - Stores events for audit trails and historical analysis
-  - Provides event query and filtering APIs
-  - Event deduplication and processing
-  - Real-time event notification to subscribed clients
-- **Technology:** Spring Boot, Spring Cloud Stream, RabbitMQ
-- **Deployment:** Independent deployment as a Git submodule
-- **Event Sources:** Receives events from telemetry services, apartment service, user service
-- **Scalability:** Handles high-volume event streams with asynchronous processing
-
-#### `home-iot-ms-gateway`
-- **Purpose:** Additional gateway service for telemetry and sensor data routing
-- **Responsibilities:**
-  - Provides supplementary APIs for telemetry queries
-  - Acts as a facade for complex multi-service queries
-  - Publishes telemetry-related events to RabbitMQ
-  - Handles device discovery and metadata queries
-  - May serve as a secondary gateway for specific device types
-- **Technology:** Spring Boot, RabbitMQ Client, Eureka Client
-- **Deployment:** Independent module (Git submodule reference)
-
-### 4. **Telemetry Microservices**
-
-#### `home-iot-ms-telemetry-reader`
-- **Purpose:** Real-time telemetry data ingestion and query service
-- **Responsibilities:**
-  - Read telemetry data from sensors (via MQTT, REST APIs, or message queues)
-  - Validate and normalize sensor data formats
-  - Store telemetry readings with timestamps
-  - Provide REST APIs to query historical telemetry data
-  - Support range queries, aggregations, and filtering
-  - Publish telemetry events asynchronously to RabbitMQ for downstream processing
-  - Expose APIs for retrieving latest sensor values
-- **Technology:** Spring Boot, Spring Data, Time-series data support, RabbitMQ Client
-- **Data Model:** Time-series sensor readings with metadata
-- **Performance:** Optimized for high-volume read operations and time-range queries
-- **Event Publishing:** Continuously emits sensor reading events
-
-#### `home-iot-ms-telemetry-writer`
-- **Purpose:** Telemetry data persistence and write optimization
-- **Responsibilities:**
-  - Accept telemetry data from external IoT devices or forwarders
-  - Write telemetry data to persistent storage (database)
-  - Handle data validation, transformation, and enrichment
-  - Publish write confirmation events to RabbitMQ
-  - Implement data buffering and batch operations for efficiency
-  - Manage data retention policies
-- **Technology:** Spring Boot, Spring Data, Database drivers, RabbitMQ Client
-- **Deployment:** Independent microservice (Git submodule)
-- **Data Persistence:** Direct database writes for durability
-- **Event Publishing:** Emits events for write completions and errors
-
-### 5. **IoT Device Integration**
-
-#### `home-iot-zigbee2mqtt-forwarder`
-- **Purpose:** Bridge between Zigbee devices and the Home IoT platform via MQTT
-- **Responsibilities:**
-  - Subscribe to Zigbee2MQTT MQTT broker topics
-  - Receive real-time telemetry from Zigbee sensors and devices
-  - Format and transform Zigbee device data to platform format
-  - Forward telemetry data to the telemetry microservices
-  - Handle device discovery announcements from Zigbee network
-  - Manage device lifecycle events (join, leave, status updates)
-- **Technology:** Python, MQTT Client, REST APIs
-- **Deployment:** Standalone Python application (containerized via Docker)
-- **Communication Protocol:** 
-  - MQTT for Zigbee device communication
-  - REST/HTTP to publish data to telemetry services
-- **File:** `zigbee2mqtt_forwarder.py`
-- **Docker:** Includes `Dockerfile` for containerization
-- **Configuration:** Environment variables in `.env` file
+Provides:
+- **DTOs** — `ApartmentDto`, `GatewayDto`, `EventDto`, `TelemetryEventDto`, `JwtValidationResultDto`, etc.
+- **Security configs** — `MvcSecurityConfig` (Servlet) and `ReactiveSecurityConfig` (WebFlux), auto-selected via `@ConditionalOnWebApplication`
+- **Cross-cutting** — CORS config, Jackson config, `RequestIdFilter`, `RestTemplate`/`WebClient` builders, global exception handler
+- **Constants** — `ApplicationConstants.USER_ID_HEADER` (`X-User-Id`)
 
 ---
 
 ## Communication Patterns
 
-### Synchronous Communication
-- **REST APIs:** Direct HTTP calls between services via API Gateway
-- **Service-to-Service:** Using Eureka for service discovery
-- **Use Cases:** User queries, device status checks, configuration retrieval
+### Synchronous (REST)
+All inter-service calls use direct HTTP via **URL diretti** configured with environment variables — no Eureka, no service registry.
 
-### Asynchronous Communication
-- **RabbitMQ:** Event-driven messaging for decoupled services
-- **Publish-Subscribe:** Services publish events, others subscribe and process
-- **Use Cases:** Telemetry events, device alerts, audit logging, data aggregation
+```yaml
+# Example: api-gateway routes
+uri: http://${MS_APARTMENT_HOST:localhost}:${SERVICES_PORT:8080}
+```
 
-### Service Discovery
-- **Eureka Client:** All services register their health and location
-- **Load Balancing:** Spring Cloud provides client-side load balancing
-- **Resilience:** Services can handle temporary unavailability of other services
+### Asynchronous (RabbitMQ)
+- **Producer**: `ms-telemetry-writer` publishes `TelemetryEventDto` to a `DirectExchange` (`telemetry.exchange`) with routing key `telemetry.key`
+- **Consumer**: `ms-events` listens on `telemetry.queue` with **manual ACK** and processes threshold-based alarm logic
+
+### IoT (MQTT)
+- `ms-telemetry-writer` subscribes to `gateways/+/sensors/#` via Spring Integration MQTT (Eclipse Paho)
+- `zigbee2mqtt-forwarder` bridges local Zigbee2MQTT topics to the remote broker
 
 ---
 
-## Data Flow Example: Telemetry Ingestion
+## Configuration Profiles
 
-```
-1. Zigbee Device → Zigbee2MQTT Network
-                      ↓
-2. MQTT Forwarder → Consumes MQTT messages
-                      ↓
-3. Telemetry Writer → Receives and persists data
-                      ↓
-4. RabbitMQ → Publishes telemetry events
-                      ↓
-5. Event Service → Consumes and stores events
-   Apartment Service → Aggregates data
-                      ↓
-6. API Gateway ← Query requests
-                      ↓
-7. Client Application ← Telemetry data
-```
+Every service ships three Spring profiles:
 
----
+| Profile | Activated via | Purpose |
+|---------|--------------|---------|
+| `default` | — | Local IDE development (`localhost`) |
+| `docker` | `SPRING_PROFILES_ACTIVE=docker` | Docker Compose (container DNS names) |
+| `aws` | `SPRING_PROFILES_ACTIVE=aws` | AWS Fargate (DocumentDB TLS, Amazon MQ TLS, JSON logging) |
 
-## Project Structure
+### Key Environment Variables
 
-```
-home-iot/
-├── README.md                                 # This file
-├── home-iot-api-gateway/                    # API Gateway (Spring Cloud Gateway)
-│   └── src/main/java/...
-├── home-iot-auth-server/                    # Authentication & Authorization
-│   ├── src/main/java/...
-│   └── src/test/java/...
-├── home-iot-ms-apartment/                   # Apartment Domain Service
-│   ├── src/main/java/...
-│   └── src/test/java/...
-├── home-iot-ms-user/                        # User Management Service
-│   ├── src/main/java/...
-│   └── src/test/java/...
-├── home-iot-ms-events/                      # Event Management Service (Submodule)
-│   └── src/main/java/...
-├── home-iot-ms-gateway/                     # Telemetry Gateway Service (Submodule)
-│   └── src/main/java/...
-├── home-iot-ms-telemetry-reader/            # Telemetry Reader Service (Submodule)
-│   └── src/main/java/...
-├── home-iot-ms-telemetry-writer/            # Telemetry Writer Service (Submodule)
-│   └── src/main/java/...
-├── home-iot-zigbee2mqtt-forwarder/          # Zigbee2MQTT Forwarder (Python)
-│   ├── zigbee2mqtt_forwarder.py             # Main forwarder application
-│   ├── Dockerfile                           # Docker container configuration
-│   └── env                                  # Environment variables
-└── images/                                  # Documentation images
-    ├── smart-home.png
-    ├── apartments-list.png
-    ├── apartment-details.png
-    └── ... (UI screenshots)
-```
+| Variable | Services | Purpose |
+|----------|----------|---------|
+| `HOME_IOT_JWT_SECRET` | auth-server | JWT signing key |
+| `HOME_IOT_ADMIN_USERNAME` / `PASSWORD` | ms-user | Bootstrap admin account |
+| `HOME_IOT_INFLUX_HOST` / `API_TOKEN` | telemetry-reader, telemetry-writer | InfluxDB connection |
+| `HOME_IOT_MQTT_HOST` / `CLIENT_ID` / `TOPIC` | telemetry-writer | MQTT broker connection |
+| `SPRING_RABBITMQ_HOST` / `PORT` | ms-events, telemetry-writer | RabbitMQ connection |
+| `SPRING_DATA_MONGODB_HOST` / `DATABASE` | ms-apartment, ms-gateway, ms-user, ms-events | MongoDB connection |
+| `MONGODB_URI` | *(aws profile only)* | Full DocumentDB URI with TLS |
+| `MS_*_HOST`, `SERVICES_PORT` | api-gateway, auth-server, bff-ios, ms-events | Inter-service URL resolution |
 
 ---
 
@@ -335,30 +140,218 @@ home-iot/
 
 ### Prerequisites
 
-- **Java 21** or higher
-- **Gradle** (included via gradle wrapper)
-- **Docker & Docker Compose** (for local development)
-- **Git** (for cloning and submodule management)
+- **Java 21**
+- **Docker & Docker Compose**
+- **Git**
 
-### Building the Project
+### 1. Clone with submodules
 
-# Change to ONE service
-docker compose up -d --build <service-name>
+```bash
+git clone --recursive https://github.com/davidedilecce/home-iot.git
+cd home-iot
+```
 
-# Change to home-iot-common (rebuild everything)
+### 2. Set environment variables
+
+```bash
+cp .env.example .env
+# Edit .env with your values (JWT secret, admin credentials, InfluxDB token, etc.)
+```
+
+### 3. Start everything
+
+```bash
+# Full stack (infra + all 9 services)
 docker compose up -d --build
 
-# Only environment variables changed in docker-compose
-docker compose up -d <service-name>
+# Watch logs
+docker compose logs -f
 
-# View logs in real time
-docker compose logs -f <service-name>
+# Stop
+docker compose down
 
-# Fast development: only infrastructure in Docker
+# Stop and delete volumes
+docker compose down -v
+```
+
+### 4. Fast development (IDE mode)
+
+```bash
+# Start only infrastructure
 docker compose up -d mongodb rabbitmq influxdb mosquitto
-# → then run the service from the IDE with the "docker" profile
 
+# Run individual services from your IDE with Spring profile "docker"
+# VM option: -Dspring.profiles.active=docker
+```
 
-## Acknowledgments
+### Port Map (Docker Compose)
+
+| Service | Host Port | Container Port |
+|---------|-----------|---------------|
+| **api-gateway** (entry point) | `localhost:8080` | 8080 |
+| auth-server | `localhost:8889` | 8080 |
+| bff-ios | `localhost:8010` | 8080 |
+| ms-apartment | `localhost:9000` | 8080 |
+| ms-gateway | `localhost:9001` | 8080 |
+| ms-user | `localhost:9002` | 8080 |
+| ms-events | `localhost:9003` | 8080 |
+| ms-telemetry-reader | `localhost:9010` | 8080 |
+| ms-telemetry-writer | *(headless)* | actuator 8082 |
+| MongoDB | `localhost:27017` | 27017 |
+| RabbitMQ | `localhost:5672` / `15672` (mgmt) | 5672 / 15672 |
+| InfluxDB | `localhost:8086` | 8086 |
+| Mosquitto (MQTT) | `localhost:1883` | 1883 |
+
+### Quick Change Commands
+
+```bash
+# Rebuild a single service after code change
+docker compose up -d --build <service-name>
+
+# Rebuild all (e.g. after changing home-iot-common)
+docker compose up -d --build
+
+# Only env var changed — no rebuild needed
+docker compose up -d <service-name>
+```
+
+---
+
+## API Gateway — Routes
+
+All traffic enters via `api-gateway` on port **8080**. Public and authenticated routes:
+
+| Method | Path | Backend | Auth |
+|--------|------|---------|------|
+| POST | `/auth/login` | auth-server | ❌ Public |
+| GET | `/users`, `/users/{id}` | ms-user | ✅ ADMIN |
+| POST/PUT/DELETE | `/users`, `/users/{id}` | ms-user | ✅ ADMIN |
+| GET/POST/PUT/DELETE | `/apartments/**` | ms-apartment | ✅ ADMIN |
+| GET/POST/PUT/DELETE | `/gateways/**` | ms-gateway | ✅ ADMIN |
+| GET | `/telemetry/gateways/{name}/last` | ms-telemetry-reader | ✅ ADMIN |
+| GET | `/telemetry/gateways/{name}/query` | ms-telemetry-reader | ✅ ADMIN |
+| GET/PUT | `/events/**` | ms-events | ✅ ADMIN |
+| GET | `/ios/apartments/**` | bff-ios | ✅ USER |
+| GET | `/ios/events` | bff-ios | ✅ USER |
+
+Authentication flow: `Authorization: Bearer <JWT>` → api-gateway calls `auth-server/verify` → if valid, injects `X-User-Id` header → request forwarded.
+
+---
+
+## Health Checks
+
+Every service exposes Spring Boot Actuator health endpoints:
+
+```bash
+# Liveness (is the process alive?)
+curl http://localhost:8080/actuator/health/liveness
+
+# Readiness (is the service ready to accept traffic?)
+curl http://localhost:8080/actuator/health/readiness
+
+# General health
+curl http://localhost:8080/actuator/health
+```
+
+`ms-telemetry-writer` exposes health on a dedicated management port:
+
+```bash
+curl http://localhost:8082/actuator/health
+```
+
+---
+
+## Production — AWS Fargate
+
+The project is **Fargate-ready**. See [`FARGATE_READINESS.md`](FARGATE_READINESS.md) for the full analysis and [`DEPLOY_AWS.md`](DEPLOY_AWS.md) for the step-by-step deployment guide.
+
+### Architecture on AWS
+
+```
+Internet → ALB (HTTPS :443) → api-gateway (Fargate)
+                                    ↓
+                        ┌───────────┼───────────────┐
+                        ↓           ↓               ↓
+                   auth-server   bff-ios        ms-* services
+                   (Fargate)     (Fargate)      (Fargate)
+                                                    ↓
+                        ┌───────────┼───────────────┐
+                        ↓           ↓               ↓
+                   DocumentDB   Amazon MQ       InfluxDB
+                   (MongoDB)    (RabbitMQ)      (EC2)
+```
+
+### Key Production Features
+
+- **Graceful shutdown** — `server.shutdown=graceful` + 15s drain period
+- **Non-root containers** — all Dockerfiles run as `appuser:appgroup`
+- **JVM container-aware** — `-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC`
+- **Structured logging** — JSON output (`logback-spring.xml`) for CloudWatch Insights
+- **TLS ready** — `application-aws.yaml` profiles with DocumentDB TLS + Amazon MQ SSL
+- **Layer-cached builds** — Gradle dependencies cached separately from source code
+
+---
+
+## iOS App
+
+The companion iOS app is available at: [**home-iot-ios**](https://github.com/davidedilecce/home-iot-ios)
+
+| Login | Apartments | Apartment Detail | Alarms | Events | Profile |
+|-------|-----------|-----------------|--------|--------|---------|
+| <img src="images/login.png" width="120"/> | <img src="images/apartments-list.png" width="120"/> | <img src="images/apartment-details-4.png" width="120"/> | <img src="images/apartment-details.png" width="120"/> | <img src="images/events-list.png" width="120"/> | <img src="images/profile.png" width="120"/> |
+
+---
+
+## Project Structure
+
+```
+home-iot/
+├── docker-compose.yml                        # Full local stack (infra + 9 services)
+├── .env.example                              # Environment variable template
+├── .dockerignore                             # Docker build exclusions
+├── gradle/
+│   └── libs.versions.toml                    # Shared Gradle version catalog
+├── docker/
+│   ├── api-gateway/Dockerfile
+│   ├── auth-server/Dockerfile
+│   ├── bff-ios/Dockerfile
+│   ├── ms-apartment/Dockerfile
+│   ├── ms-events/Dockerfile
+│   ├── ms-gateway/Dockerfile
+│   ├── ms-telemetry-reader/Dockerfile
+│   ├── ms-telemetry-writer/Dockerfile
+│   ├── ms-user/Dockerfile
+│   └── mosquitto/mosquitto.conf
+├── home-iot-common/                          # Shared library (DTOs, configs, exceptions)
+│   └── src/main/java/.../common/
+│       ├── config/                           # Security, CORS, Jackson, WebClient
+│       ├── constant/                         # ApplicationConstants
+│       ├── dto/                              # Shared DTOs (16 classes)
+│       ├── exceptions/                       # Global exception types
+│       ├── handler/                          # Global exception handler
+│       └── util/                             # Utility classes
+├── home-iot-api-gateway/                     # Spring Cloud Gateway (WebFlux)
+├── home-iot-auth-server/                     # JWT auth service
+├── home-iot-bff-ios/                         # BFF for iOS (Reactive + Resilience4j)
+├── home-iot-ms-apartment/                    # Apartment domain service (MongoDB)
+├── home-iot-ms-gateway/                      # IoT gateway domain service (MongoDB)
+├── home-iot-ms-user/                         # User management service (MongoDB)
+├── home-iot-ms-events/                       # Event processor (MongoDB + RabbitMQ)
+├── home-iot-ms-telemetry-reader/             # Telemetry query API (InfluxDB)
+├── home-iot-ms-telemetry-writer/             # Telemetry ingest (MQTT + InfluxDB + RabbitMQ)
+├── home-iot-zigbee2mqtt-forwarder/           # Python MQTT bridge
+│   ├── zigbee2mqtt_forwarder.py
+│   ├── Dockerfile
+│   └── env
+├── drawio/                                   # Architecture diagram source
+├── images/                                   # UI screenshots
+├── DEPLOY_AWS.md                             # AWS deployment step-by-step guide
+└── FARGATE_READINESS.md                      # Fargate readiness analysis
+```
+
+---
+
+## License
 
 Built with ❤️ using Spring Boot, Spring Cloud, and the IoT community.
+

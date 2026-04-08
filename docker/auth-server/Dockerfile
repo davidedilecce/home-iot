@@ -12,24 +12,30 @@ COPY home-iot-common/build.gradle.kts                 home-iot-common/build.grad
 COPY home-iot-common/settings.gradle.kts              home-iot-common/settings.gradle.kts
 COPY home-iot-common/src                              home-iot-common/src
 
-# Service module
+# Service module — dependency layer (cached if build.gradle.kts unchanged)
 COPY home-iot-auth-server/gradle/wrapper              home-iot-auth-server/gradle/wrapper
 COPY home-iot-auth-server/gradlew                     home-iot-auth-server/gradlew
 COPY home-iot-auth-server/build.gradle.kts            home-iot-auth-server/build.gradle.kts
 COPY home-iot-auth-server/settings.gradle.kts         home-iot-auth-server/settings.gradle.kts
-COPY home-iot-auth-server/src                         home-iot-auth-server/src
 
-# Build
 WORKDIR /workspace/home-iot-auth-server
-RUN chmod +x gradlew && ./gradlew bootJar --no-daemon -x test
+RUN chmod +x gradlew && ./gradlew dependencies --no-daemon
+
+# Service module — source & build (re-runs only when src changes)
+COPY home-iot-auth-server/src                         /workspace/home-iot-auth-server/src
+RUN ./gradlew bootJar --no-daemon -x test
 
 # ===== Stage 2: Runtime =====
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 COPY --from=build /workspace/home-iot-auth-server/build/libs/*.jar app.jar
+RUN chown appuser:appgroup app.jar
+
+USER appuser
 
 EXPOSE 8080
-ENV JAVA_OPTS=""
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
-
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
