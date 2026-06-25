@@ -263,7 +263,7 @@ curl http://localhost:8082/actuator/health
 
 ## Production — AWS Fargate
 
-The project is **Fargate-ready**. See [`FARGATE_READINESS.md`](FARGATE_READINESS.md) for the full analysis and [`DEPLOY_AWS.md`](DEPLOY_AWS.md) for the step-by-step deployment guide.
+The project is **Fargate-ready**. See [`DEPLOY_AWS.md`](DEPLOY_AWS.md) for the step-by-step deployment guide.
 
 ### Architecture on AWS
 
