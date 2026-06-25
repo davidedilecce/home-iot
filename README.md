@@ -263,7 +263,7 @@ curl http://localhost:8082/actuator/health
 
 ## Production — AWS Fargate
 
-The project is **Fargate-ready**. See [`DEPLOY_AWS.md`](DEPLOY_AWS.md) for the step-by-step deployment guide.
+The project is **Fargate-ready**.
 
 ### Architecture on AWS
 
@@ -345,8 +345,6 @@ home-iot/
 │   └── env
 ├── drawio/                                   # Architecture diagram source
 ├── images/                                   # UI screenshots
-├── DEPLOY_AWS.md                             # AWS deployment step-by-step guide
-└── FARGATE_READINESS.md                      # Fargate readiness analysis
 ```
 
 ---
